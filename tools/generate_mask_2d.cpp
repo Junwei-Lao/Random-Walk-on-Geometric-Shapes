@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
 
     int index = args.getInt("index", 50);
     bool shellOnly = args.getBool("shell", false);
-    std::string outdir = args.getStr("outdir", shellOnly ? "visualization/shell_visual" : "visualization");
+    std::string outdir = args.getStr("outdir", defaultDataDir(argv[0]));
     std::filesystem::create_directories(outdir);
 
     bool **mask = nullptr;

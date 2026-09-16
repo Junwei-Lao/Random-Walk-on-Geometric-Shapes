@@ -12,6 +12,16 @@
 #   make run-2d-hull HULLSHAPE2D=HEXAGON
 #   make run-3d-hull HULLSHAPE3D=OCTAHEDRON
 #
+# To sweep multiple shapes in one command, use the plural SHAPES variable
+# (space-separated -- NOT comma-separated -- each run-* target loops the
+# binary once per shape) instead of SHAPE:
+#
+#   make run-2d SHAPES="SQUARE CIRCLE HEXAGON"
+#   make run-2d SHAPES=ALL              # every 2D shape
+#   make run-3d SHAPES3D=ALL            # every 3D shape
+#   make run-2d-hull HULLSHAPES2D=ALL
+#   make run-3d-hull HULLSHAPES3D=ALL
+#
 # Run `make help` for the full variable/target list, or `make list-shapes-2d`
 # (etc.) to see valid --shape values without reading any source file.
 
@@ -24,14 +34,21 @@ OBJDIR := obj
 BIN   := bin
 
 # ---- Run parameters: override on the command line ----
-SHAPE               ?= SQUARE      # convex_2d shape name (make list-shapes-2d)
-SHAPE3D             ?= SPHERE      # convex_3d shape name (make list-shapes-3d)
+SHAPE               ?= POLYGON15      # convex_2d shape name (make list-shapes-2d)
+SHAPE3D             ?= CUBE      # convex_3d shape name (make list-shapes-3d)
 HULLSHAPE2D         ?= SQUARE      # convex_2d_convexhull shape name (make list-shapes-2d-hull)
 HULLSHAPE3D         ?= CUBE        # convex_3d_convexhull shape name (make list-shapes-3d-hull)
+# Space-separated shape lists (NOT comma-separated) -- when set, these run
+# the same sweep once per shape instead of the single SHAPE/SHAPE3D/etc.
+# above, e.g. make run-2d SHAPES="SQUARE CIRCLE HEXAGON"
+SHAPES              ?= 
+SHAPES3D            ?= 
+HULLSHAPES2D        ?=
+HULLSHAPES3D        ?=
 MODE                ?= hard        # hard | soft | drag (drag requires SHAPE=SQUARE)
 INDEX_MIN           ?= 10
 INDEX_MAX           ?= 100
-INDEX_STEP          ?= 10
+INDEX_STEP          ?= 1
 RUNS                ?= 1000
 THREADS             ?= 0           # 0 = auto-detect hardware concurrency
 OUTDIR              ?=             # empty = each binary's own default (results_2d, ...)
@@ -45,7 +62,7 @@ COVERAGE_FRACTION_2D ?= 0.5        # hull engine stopping fraction (2D doc defau
 COVERAGE_FRACTION_3D ?= 0.75       # hull engine stopping fraction (3D doc default)
 INDEX               ?= 50          # mask-2d index
 INDEX3D             ?= 20          # mask-3d index
-SHELL_ONLY          ?= 0           # mask tools: 1 = boundary points only
+SHELL_ONLY          ?= 1           # mask tools: 1 = boundary points only
 
 seed_flag = $(if $(SEED),--seed=$(SEED))
 outdir_flag = $(if $(OUTDIR),--outdir=$(OUTDIR))
@@ -117,28 +134,52 @@ $(BIN)/mask3d: tools/generate_mask_3d.cpp src/convex_3d/shapes.cpp src/convex_3d
 
 # ---------------- Run targets ----------------
 run-2d: $(BIN)/walk2d
-	./$(BIN)/walk2d --shape=$(SHAPE) --mode=$(MODE) \
-	  --index-min=$(INDEX_MIN) --index-max=$(INDEX_MAX) --index-step=$(INDEX_STEP) \
-	  --runs=$(RUNS) --threads=$(THREADS) \
-	  --temperature=$(TEMPERATURE) --distance-power=$(DISTANCE_POWER) --drag-force=$(DRAG_FORCE) \
-	  --cover=$(COVER) --rho=$(RHO) $(outdir_flag) $(seed_flag)
+	@set -e; \
+	shapes="$(if $(SHAPES),$(SHAPES),$(SHAPE))"; \
+	if [ "$$shapes" = "ALL" ]; then shapes=$$(./$(BIN)/walk2d --list-shapes); fi; \
+	for s in $$shapes; do \
+	  echo "=== SHAPE=$$s ==="; \
+	  ./$(BIN)/walk2d --shape=$$s --mode=$(MODE) \
+	    --index-min=$(INDEX_MIN) --index-max=$(INDEX_MAX) --index-step=$(INDEX_STEP) \
+	    --runs=$(RUNS) --threads=$(THREADS) \
+	    --temperature=$(TEMPERATURE) --distance-power=$(DISTANCE_POWER) --drag-force=$(DRAG_FORCE) \
+	    --cover=$(COVER) --rho=$(RHO) $(outdir_flag) $(seed_flag); \
+	done
 
 run-3d: $(BIN)/walk3d
-	./$(BIN)/walk3d --shape=$(SHAPE3D) \
-	  --index-min=$(INDEX_MIN) --index-max=$(INDEX_MAX) --index-step=$(INDEX_STEP) \
-	  --runs=$(RUNS) --threads=$(THREADS) $(outdir_flag) $(seed_flag)
+	@set -e; \
+	shapes="$(if $(SHAPES3D),$(SHAPES3D),$(SHAPE3D))"; \
+	if [ "$$shapes" = "ALL" ]; then shapes=$$(./$(BIN)/walk3d --list-shapes); fi; \
+	for s in $$shapes; do \
+	  echo "=== SHAPE3D=$$s ==="; \
+	  ./$(BIN)/walk3d --shape=$$s \
+	    --index-min=$(INDEX_MIN) --index-max=$(INDEX_MAX) --index-step=$(INDEX_STEP) \
+	    --runs=$(RUNS) --threads=$(THREADS) $(outdir_flag) $(seed_flag); \
+	done
 
 run-2d-hull: $(BIN)/hull2d
-	./$(BIN)/hull2d --shape=$(HULLSHAPE2D) \
-	  --index-min=$(INDEX_MIN) --index-max=$(INDEX_MAX) --index-step=$(INDEX_STEP) \
-	  --runs=$(RUNS) --threads=$(THREADS) --coverage-fraction=$(COVERAGE_FRACTION_2D) \
-	  $(outdir_flag) $(seed_flag)
+	@set -e; \
+	shapes="$(if $(HULLSHAPES2D),$(HULLSHAPES2D),$(HULLSHAPE2D))"; \
+	if [ "$$shapes" = "ALL" ]; then shapes=$$(./$(BIN)/hull2d --list-shapes); fi; \
+	for s in $$shapes; do \
+	  echo "=== HULLSHAPE2D=$$s ==="; \
+	  ./$(BIN)/hull2d --shape=$$s \
+	    --index-min=$(INDEX_MIN) --index-max=$(INDEX_MAX) --index-step=$(INDEX_STEP) \
+	    --runs=$(RUNS) --threads=$(THREADS) --coverage-fraction=$(COVERAGE_FRACTION_2D) \
+	    $(outdir_flag) $(seed_flag); \
+	done
 
 run-3d-hull: $(BIN)/hull3d
-	./$(BIN)/hull3d --shape=$(HULLSHAPE3D) \
-	  --index-min=$(INDEX_MIN) --index-max=$(INDEX_MAX) --index-step=$(INDEX_STEP) \
-	  --runs=$(RUNS) --threads=$(THREADS) --coverage-fraction=$(COVERAGE_FRACTION_3D) \
-	  $(outdir_flag) $(seed_flag)
+	@set -e; \
+	shapes="$(if $(HULLSHAPES3D),$(HULLSHAPES3D),$(HULLSHAPE3D))"; \
+	if [ "$$shapes" = "ALL" ]; then shapes=$$(./$(BIN)/hull3d --list-shapes); fi; \
+	for s in $$shapes; do \
+	  echo "=== HULLSHAPE3D=$$s ==="; \
+	  ./$(BIN)/hull3d --shape=$$s \
+	    --index-min=$(INDEX_MIN) --index-max=$(INDEX_MAX) --index-step=$(INDEX_STEP) \
+	    --runs=$(RUNS) --threads=$(THREADS) --coverage-fraction=$(COVERAGE_FRACTION_3D) \
+	    $(outdir_flag) $(seed_flag); \
+	done
 
 list-shapes-2d: $(BIN)/walk2d
 	./$(BIN)/walk2d --list-shapes
@@ -178,6 +219,8 @@ help:
 	@echo ""
 	@echo "Key variables (override on the command line):"
 	@echo "  SHAPE=$(SHAPE) SHAPE3D=$(SHAPE3D) HULLSHAPE2D=$(HULLSHAPE2D) HULLSHAPE3D=$(HULLSHAPE3D)"
+	@echo "  SHAPES/SHAPES3D/HULLSHAPES2D/HULLSHAPES3D  space-separated list (or ALL) to sweep"
+	@echo "                             multiple shapes in one run-* invocation instead of SHAPE"
 	@echo "  MODE=hard|soft|drag        (run-2d only; drag requires SHAPE=SQUARE)"
 	@echo "  INDEX_MIN/INDEX_MAX/INDEX_STEP/RUNS/THREADS/OUTDIR/SEED"
 	@echo "  TEMPERATURE/DISTANCE_POWER (soft mode)   DRAG_FORCE (drag mode)"
@@ -188,6 +231,8 @@ help:
 	@echo "  make run-2d SHAPE=HEXAGON MODE=soft TEMPERATURE=1.5 INDEX_MIN=20 INDEX_MAX=100"
 	@echo "  make run-2d SHAPE=SQUARE MODE=drag DRAG_FORCE=500"
 	@echo "  make run-2d SHAPE=SNOWFLAKE COVER=1 RHO=0.02"
+	@echo "  make run-2d SHAPES=\"SQUARE CIRCLE HEXAGON\""
+	@echo "  make run-2d SHAPES=ALL"
 	@echo "  make run-3d SHAPE3D=PYRAMID INDEX_MIN=10 INDEX_MAX=60"
 	@echo "  make run-2d-hull HULLSHAPE2D=HEXAGON"
 	@echo "  make run-3d-hull HULLSHAPE3D=OCTAHEDRON"

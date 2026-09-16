@@ -2,17 +2,10 @@
 /bin/
 /obj/
 
-# Simulation output (see makefile OUTDIR / each engine's default: CSVs into
-# data/, sample walker paths into visualization/path_visual/path_*.txt,
-# shell/boundary point dumps into visualization/shell_visual/*_shell.txt,
-# other point dumps into visualization/*.txt directly). These patterns only
-# match generated dumps, not the path_visualizer.py / shell_visualizer.py
-# scripts that live in those same two folders.
-/data/*
+# Simulation output: every engine and mask tool saves everything (CSVs,
+# sample walker paths, mask/point dumps) under one directory, defaulting to
+# data/ at the repo root (see makefile OUTDIR / each binary's --outdir).
 !/data/.gitkeep
-/visualization/*.txt
-/visualization/path_visual/path_*.txt
-/visualization/shell_visual/*_shell.txt
 
 # Custom --outdir overrides some users may pass on the command line
 results_2d/
@@ -27,3 +20,4 @@ __pycache__/
 # Editor/OS cruft
 .vscode/
 .DS_Store
+venv

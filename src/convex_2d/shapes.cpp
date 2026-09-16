@@ -204,8 +204,15 @@ BBox2D computeBBox(ShapeType2D shape, int index)
     }
     case ShapeType2D::ROTATED_SQUARE:
     {
+        // inBoundary's rotation is centered at (0, s), not (0, 0), so the
+        // shape's actual y-range is [s*(1 - cos45), s*(1 + cos45)] -- not
+        // [0, s*sqrt(2)]. Since the rasterization loop always starts at
+        // y = 0, yLen must reach the true upper bound s*(1 + cos45) or the
+        // top of the square gets silently cut off (this previously
+        // truncated ~8% of the shape's area).
         double s = std::sqrt(PI) * index;
-        return {s * std::sqrt(2.0), s * std::sqrt(2.0)};
+        double yMax = s * (1.0 + std::cos(45.0 * PI / 180.0));
+        return {s * std::sqrt(2.0), yMax};
     }
     case ShapeType2D::STRETCHED_ROTATED_SQUARE:
     {

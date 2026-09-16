@@ -40,15 +40,14 @@ src/
 tools/
   generate_mask_2d.cpp       Dumps a shape's interior (or shell-only) lattice
   generate_mask_3d.cpp       points to a text file, for visualization.
-data/                        Default CSV output (summary + per-index
-                              distribution) for all four engines.
+data/                        Default output for all four engines and both
+                              mask tools: summary/distribution CSVs, sample
+                              walker paths (--record-path), and mask/point
+                              dumps all land here (override with --outdir).
 visualization/
-  path_visual/                Default location for one sample walker path
-                               per index (--record-path, 2D/3D analytic engines).
-  shell_visual/                Default location for shell-only mask dumps
-                               (mask tools with --shell=1).
-                              Full (non-shell) mask/point dumps default to
-                              visualization/ directly.
+  path_visual/path_visualizer.py   Plots a shape boundary + a walked path
+                                    (+ optional cover circles) from data/.
+  shell_visual/shell_visualizer.py Scatter-plots a 2D/3D point dump from data/.
 ```
 
 `CIRCLE` (2D) and `SPHERE` (3D) have no finite vertex set, so they exist
@@ -75,6 +74,16 @@ make run-2d SHAPE=SNOWFLAKE COVER=1 RHO=0.02
 make run-3d SHAPE3D=PYRAMID INDEX_MIN=10 INDEX_MAX=60
 make run-2d-hull HULLSHAPE2D=HEXAGON
 make run-3d-hull HULLSHAPE3D=OCTAHEDRON
+
+# Sweep multiple shapes in one command: use the plural SHAPES variable
+# (space-separated, not comma-separated) instead of SHAPE. Each run-* target
+# loops the binary once per shape. SHAPE(S) is single-valued only -- a
+# comma list like SHAPE="SQUARE,CIRCLE" would just fail as an unknown shape.
+make run-2d SHAPES="SQUARE CIRCLE HEXAGON"
+make run-2d SHAPES=ALL              # every 2D shape
+make run-3d SHAPES3D=ALL            # every 3D shape
+make run-2d-hull HULLSHAPES2D=ALL
+make run-3d-hull HULLSHAPES3D=ALL
 
 make list-shapes-2d         # print valid --shape values for each engine
 make list-shapes-3d
@@ -120,3 +129,23 @@ found along the way (each documented at its fix site in the source):
 - `src/nonconvex_2d/` (an older BOWTIE/DOUBLEBOWTIE-only prototype) was
   removed; `convex_2d` already implements those two shapes plus three more
   under one unified `ShapeType2D` enum.
+- `ROTATED_SQUARE`'s bounding box assumed the shape spans `[0, s*sqrt(2)]`
+  in both x and y, but its rotation is centered at `(0, s)`, so the true
+  y-range is `[s*(1-cos45), s*(1+cos45)]`. Since the rasterization loop
+  always starts at y=0, this silently truncated the top ~8% of the shape's
+  area; fixed by extending the box to the true upper bound
+  (`src/convex_2d/shapes.cpp`).
+- `path_visualizer.py` originally only drew boundaries for 5 of the 21 2D
+  shapes (circle, the two named non-convex shapes, and generic regular
+  polygons); it now has a generator for every `ShapeType2D` value, each
+  ported from and numerically cross-checked against the real C++
+  rasterization. That check also caught a second bug: the regular-polygon
+  generator placed vertices at `(2k+1)*sector/2` for every N, which is only
+  correct for odd N -- even N (hexagon, octagon, decagon, 12-gon) needed
+  vertices at `k*sector` instead, a half-sector rotation off from what was
+  there before.
+- All four engines and both mask tools now save everything under one
+  `--outdir` (default `data/`) instead of splitting CSVs, paths, and point
+  dumps across `data/` and two `visualization/` subfolders. The
+  `visualization/` scripts read from `data/` accordingly, resolved relative
+  to each script's own file location so it works from any working directory.

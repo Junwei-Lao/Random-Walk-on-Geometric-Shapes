@@ -57,9 +57,8 @@ void printUsage(const char *prog)
         "  --runs=N              Independent runs per index (default 1000)\n"
         "  --coverage-fraction=F Fraction of grid points to visit (default 0.75, doc 3D)\n"
         "  --threads=N           Worker threads (default: hardware concurrency)\n"
-        "  --data-dir=DIR        CSV output directory (default data)\n"
-        "  --points-dir=DIR      Interior grid point dump directory (default visualization)\n"
-        "  --outdir=DIR          Overrides both --data-dir and --points-dir at once\n"
+        "  --outdir=DIR          Output directory for CSVs and point dumps\n"
+        "                        (default: <repo_root>/data, resolved from this binary's location)\n"
         "  --seed=N              Deterministic RNG seed (default: random)\n"
         "  --export-points=0|1   Dump the domain's interior grid points per index (default 0)\n";
 }
@@ -97,13 +96,9 @@ int main(int argc, char *argv[])
     const double coverageFraction = args.getDouble("coverage-fraction", 0.75);
     const bool exportPoints = args.getBool("export-points", false);
 
-    std::string dataDir = args.getStr("data-dir", "data");
-    std::string pointsDir = args.getStr("points-dir", "visualization");
-    if (args.has("outdir"))
-    {
-        dataDir = args.getStr("outdir", dataDir);
-        pointsDir = args.getStr("outdir", pointsDir);
-    }
+    // Everything (summary/distribution CSVs and grid-point dumps) is saved
+    // under one directory, defaulting to data/ at the repo root.
+    const std::string outdir = args.getStr("outdir", defaultDataDir(argv[0]));
 
     unsigned workerCount = static_cast<unsigned>(args.getInt("threads", 0));
     if (workerCount == 0)
@@ -112,9 +107,7 @@ int main(int argc, char *argv[])
         workerCount = 4;
     workerCount = std::min<unsigned>(workerCount, std::max(1u, numRuns));
 
-    fs::create_directories(dataDir);
-    if (exportPoints)
-        fs::create_directories(pointsDir);
+    fs::create_directories(outdir);
 
     ConvexHullDomain3D baseDomain;
     try
@@ -131,7 +124,7 @@ int main(int argc, char *argv[])
               << " Runs=" << numRuns << " Threads=" << workerCount
               << " CoverageFraction=" << coverageFraction << "\n";
 
-    const std::string summaryFile = dataDir + "/summary_" + shapeStr + "_hull.csv";
+    const std::string summaryFile = outdir + "/summary_" + shapeStr + "_hull.csv";
     std::uint64_t seedBase = args.has("seed") ? static_cast<std::uint64_t>(args.getInt("seed", 0))
                                                : std::random_device{}();
 
@@ -156,7 +149,7 @@ int main(int argc, char *argv[])
 
         if (exportPoints)
         {
-            std::ofstream pf(pointsDir + "/points_" + shapeStr + "_hull_" + std::to_string(index) + ".txt");
+            std::ofstream pf(outdir + "/points_" + shapeStr + "_hull_" + std::to_string(index) + ".txt");
             for (const auto &p : domain.points())
                 pf << p.x << " " << p.y << " " << p.z << "\n";
         }
@@ -185,7 +178,7 @@ int main(int argc, char *argv[])
 
         RunStats stats = computeStats(stepResults);
 
-        std::ofstream distFile(dataDir + "/distribution_" + shapeStr + "_hull_" + std::to_string(index) + ".csv");
+        std::ofstream distFile(outdir + "/distribution_" + shapeStr + "_hull_" + std::to_string(index) + ".csv");
         distFile << "Steps\n";
         for (double v : stepResults)
             distFile << v << "\n";

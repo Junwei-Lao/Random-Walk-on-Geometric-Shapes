@@ -33,7 +33,7 @@ int main(int argc, char *argv[])
 
     int index = args.getInt("index", 20);
     bool shellOnly = args.getBool("shell", false);
-    std::string outdir = args.getStr("outdir", shellOnly ? "visualization/shell_visual" : "visualization");
+    std::string outdir = args.getStr("outdir", defaultDataDir(argv[0]));
     std::filesystem::create_directories(outdir);
 
     int xMin, xMax, yMin, yMax, zMin, zMax;

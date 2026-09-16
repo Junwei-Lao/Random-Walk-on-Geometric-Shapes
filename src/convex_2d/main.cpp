@@ -103,9 +103,8 @@ void printUsage(const char *prog)
         "  --cover=0|1             Enable disk-covering analysis (default 0)\n"
         "  --rho=R                 Covering radius R(n) = rho * n (default 0.01)\n"
         "  --threads=N             Worker threads (default: hardware concurrency)\n"
-        "  --data-dir=DIR          CSV output directory (default data)\n"
-        "  --path-dir=DIR          Sample walker path directory (default visualization/path_visual)\n"
-        "  --outdir=DIR            Overrides both --data-dir and --path-dir at once\n"
+        "  --outdir=DIR            Output directory for all CSVs and paths\n"
+        "                          (default: <repo_root>/data, resolved from this binary's location)\n"
         "  --seed=N                Deterministic RNG seed (default: random)\n"
         "  --record-path=0|1       Dump one sample walker path per index (default 1)\n";
 }
@@ -161,17 +160,9 @@ int main(int argc, char *argv[])
     const unsigned numRuns = static_cast<unsigned>(std::max(1, args.getInt("runs", 1000)));
     const bool recordPath = args.getBool("record-path", true);
 
-    // CSV results default into data/, sample walker paths into
-    // visualization/path_visual/ -- matching this repo's existing (empty)
-    // scaffolding for those two output kinds. --outdir overrides both at
-    // once, for callers who just want everything in one place.
-    std::string dataDir = args.getStr("data-dir", "data");
-    std::string pathDir = args.getStr("path-dir", "visualization/path_visual");
-    if (args.has("outdir"))
-    {
-        dataDir = args.getStr("outdir", dataDir);
-        pathDir = args.getStr("outdir", pathDir);
-    }
+    // Everything (summary/distribution CSVs and sample walker paths) is
+    // saved under one directory, defaulting to data/ at the repo root.
+    const std::string outdir = args.getStr("outdir", defaultDataDir(argv[0]));
 
     unsigned workerCount = static_cast<unsigned>(args.getInt("threads", 0));
     if (workerCount == 0)
@@ -180,8 +171,7 @@ int main(int argc, char *argv[])
         workerCount = 4;
     workerCount = std::min<unsigned>(workerCount, std::max(1u, numRuns));
 
-    fs::create_directories(dataDir);
-    fs::create_directories(pathDir);
+    fs::create_directories(outdir);
 
     std::random_device rd;
     std::vector<WalkContext2D> contexts(workerCount);
@@ -210,7 +200,7 @@ int main(int argc, char *argv[])
     // a different --cover value would be mistaken for already-completed
     // work by summaryRowExists() and silently skipped.
     const std::string runTag = shapeStr + "_" + modeName(params.mode) + (params.enableCover ? "_cover" : "");
-    const std::string summaryFile = dataDir + "/summary_" + runTag + ".csv";
+    const std::string summaryFile = outdir + "/summary_" + runTag + ".csv";
 
     for (int index = indexMin; index <= indexMax; index += indexStep)
     {
@@ -272,7 +262,7 @@ int main(int argc, char *argv[])
         RunStats stepStats = computeStats(stepResults);
         RunStats coverStats = params.enableCover ? computeStats(coverResults) : RunStats{};
 
-        std::ofstream distFile(dataDir + "/distribution_" + runTag + "_" + std::to_string(index) + ".csv");
+        std::ofstream distFile(outdir + "/distribution_" + runTag + "_" + std::to_string(index) + ".csv");
         distFile << "Steps" << (params.enableCover ? ",Coverage\n" : "\n");
         for (unsigned i = 0; i < numRuns; ++i)
         {
@@ -293,7 +283,7 @@ int main(int argc, char *argv[])
 
         if (recordPath && !chosenPath.empty())
         {
-            std::ofstream pathFile(pathDir + "/path_" + runTag + "_" + std::to_string(index) + ".txt");
+            std::ofstream pathFile(outdir + "/path_" + runTag + "_" + std::to_string(index) + ".txt");
             for (const auto &pt : chosenPath)
                 pathFile << pt.x << " " << pt.y << "\n";
         }

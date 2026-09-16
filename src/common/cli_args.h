@@ -12,7 +12,9 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <string>
+#include <system_error>
 #include <unordered_map>
 #include <vector>
 
@@ -81,6 +83,21 @@ public:
 private:
     std::unordered_map<std::string, std::string> values_;
 };
+
+// Every binary is built into <repo_root>/bin/ (see the root Makefile), so
+// this resolves the default data/ output directory relative to the running
+// executable's own location -- correct no matter what the caller's current
+// working directory happens to be. A plain "data" default would instead
+// resolve against the caller's cwd, so `cd bin && ./walk2d` would silently
+// write into bin/data/ instead of the repo's own data/.
+inline std::string defaultDataDir(const char *argv0)
+{
+    std::error_code ec;
+    std::filesystem::path exePath = std::filesystem::canonical(argv0, ec);
+    if (!ec)
+        return (exePath.parent_path().parent_path() / "data").string();
+    return "data"; // fallback: relative to cwd
+}
 
 struct RunStats
 {

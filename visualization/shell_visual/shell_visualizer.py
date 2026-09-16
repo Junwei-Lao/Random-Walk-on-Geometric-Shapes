@@ -8,16 +8,28 @@ Consolidates two previously separate scripts -- genDots.py (2D scatter) and
 3dplotting.py (3D scatter) -- into one file that auto-detects dimensionality
 from the number of columns in the input, so this is the one file in
 shell_visual/.
+
+All C++ engines/tools save their output into data/ at the repo root (see the
+makefile's OUTDIR / each binary's --outdir default). DATA_DIR below is
+computed relative to this script's own location, so it resolves correctly
+no matter what directory you run the script from.
 """
+
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 -- registers the 3D projection
+
+# repo_root/visualization/shell_visual/shell_visualizer.py -> repo_root/data
+DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
 
 # =============================
 # Configuration -- edit as needed
 # =============================
-FILENAME = "mask_HEXAGON_50_shell.txt"
+# Matches the C++ naming convention mask_{SHAPE}_{INDEX}[_shell].txt, e.g.
+# the file produced by `make mask-2d SHAPE=HEXAGON INDEX=50 SHELL_ONLY=1`.
+FILENAME = DATA_DIR / "mask_POLYGON15_50_shell.txt"
 
 
 def read_points(filename: str):
