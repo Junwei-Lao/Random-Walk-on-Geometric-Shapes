@@ -106,7 +106,8 @@ void printUsage(const char *prog)
         "  --outdir=DIR            Output directory for all CSVs and paths\n"
         "                          (default: <repo_root>/data, resolved from this binary's location)\n"
         "  --seed=N                Deterministic RNG seed (default: random)\n"
-        "  --record-path=0|1       Dump one sample walker path per index (default 1)\n";
+        "  --record-path=0|1       Dump one sample walker path per index (default 1)\n"
+        "  --record-distribution=0|1 Write the per-run distribution CSV per index (default 1)\n";
 }
 
 } // namespace
@@ -159,6 +160,7 @@ int main(int argc, char *argv[])
     const int indexStep = std::max(1, args.getInt("index-step", 10));
     const unsigned numRuns = static_cast<unsigned>(std::max(1, args.getInt("runs", 1000)));
     const bool recordPath = args.getBool("record-path", true);
+    const bool recordDistribution = args.getBool("record-distribution", true);
 
     // Everything (summary/distribution CSVs and sample walker paths) is
     // saved under one directory, defaulting to data/ at the repo root.
@@ -262,14 +264,17 @@ int main(int argc, char *argv[])
         RunStats stepStats = computeStats(stepResults);
         RunStats coverStats = params.enableCover ? computeStats(coverResults) : RunStats{};
 
-        std::ofstream distFile(outdir + "/distribution_" + runTag + "_" + std::to_string(index) + ".csv");
-        distFile << "Steps" << (params.enableCover ? ",Coverage\n" : "\n");
-        for (unsigned i = 0; i < numRuns; ++i)
+        if (recordDistribution)
         {
-            distFile << stepResults[i];
-            if (params.enableCover)
-                distFile << "," << coverResults[i];
-            distFile << "\n";
+            std::ofstream distFile(outdir + "/distribution_" + runTag + "_" + std::to_string(index) + ".csv");
+            distFile << "Steps" << (params.enableCover ? ",Coverage\n" : "\n");
+            for (unsigned i = 0; i < numRuns; ++i)
+            {
+                distFile << stepResults[i];
+                if (params.enableCover)
+                    distFile << "," << coverResults[i];
+                distFile << "\n";
+            }
         }
 
         bool needsHeader = !fs::exists(summaryFile);

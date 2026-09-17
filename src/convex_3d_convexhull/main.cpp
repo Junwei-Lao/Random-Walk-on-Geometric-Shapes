@@ -60,7 +60,8 @@ void printUsage(const char *prog)
         "  --outdir=DIR          Output directory for CSVs and point dumps\n"
         "                        (default: <repo_root>/data, resolved from this binary's location)\n"
         "  --seed=N              Deterministic RNG seed (default: random)\n"
-        "  --export-points=0|1   Dump the domain's interior grid points per index (default 0)\n";
+        "  --export-points=0|1   Dump the domain's interior grid points per index (default 0)\n"
+        "  --record-distribution=0|1 Write the per-run distribution CSV per index (default 1)\n";
 }
 
 } // namespace
@@ -93,8 +94,9 @@ int main(int argc, char *argv[])
     const int indexMax = args.getInt("index-max", 70);
     const int indexStep = std::max(1, args.getInt("index-step", 10));
     const unsigned numRuns = static_cast<unsigned>(std::max(1, args.getInt("runs", 1000)));
-    const double coverageFraction = args.getDouble("coverage-fraction", 0.75);
+    const double coverageFraction = args.getDouble("coverage-fraction", 0.5); //also make it to be 50% as the 2d one
     const bool exportPoints = args.getBool("export-points", false);
+    const bool recordDistribution = args.getBool("record-distribution", true);
 
     // Everything (summary/distribution CSVs and grid-point dumps) is saved
     // under one directory, defaulting to data/ at the repo root.
@@ -178,10 +180,13 @@ int main(int argc, char *argv[])
 
         RunStats stats = computeStats(stepResults);
 
-        std::ofstream distFile(outdir + "/distribution_" + shapeStr + "_hull_" + std::to_string(index) + ".csv");
-        distFile << "Steps\n";
-        for (double v : stepResults)
-            distFile << v << "\n";
+        if (recordDistribution)
+        {
+            std::ofstream distFile(outdir + "/distribution_" + shapeStr + "_hull_" + std::to_string(index) + ".csv");
+            distFile << "Steps\n";
+            for (double v : stepResults)
+                distFile << v << "\n";
+        }
 
         bool needsHeader = !fs::exists(summaryFile);
         std::ofstream summary(summaryFile, std::ios::app);

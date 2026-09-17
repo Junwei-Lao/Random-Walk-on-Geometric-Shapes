@@ -34,32 +34,34 @@ OBJDIR := obj
 BIN   := bin
 
 # ---- Run parameters: override on the command line ----
-SHAPE               ?= SQUARE    # convex_2d shape name (make list-shapes-2d)
+SHAPE               ?= SHARP_TRIANGLE    # convex_2d shape name (make list-shapes-2d)
 SHAPE3D             ?= CUBE      # convex_3d shape name (make list-shapes-3d)
 HULLSHAPE2D         ?= SQUARE      # convex_2d_convexhull shape name (make list-shapes-2d-hull)
 HULLSHAPE3D         ?= CUBE        # convex_3d_convexhull shape name (make list-shapes-3d-hull)
 # Space-separated shape lists (NOT comma-separated) -- when set, these run
 # the same sweep once per shape instead of the single SHAPE/SHAPE3D/etc.
 # above, e.g. make run-2d SHAPES="SQUARE CIRCLE HEXAGON"
-SHAPES              ?= 
-SHAPES3D            ?= 
+SHAPES              ?= ALL
+SHAPES3D            ?= ALL
 HULLSHAPES2D        ?=
 HULLSHAPES3D        ?=
 MODE                ?= hard        # hard | soft | drag (drag requires SHAPE=SQUARE)
 INDEX_MIN           ?= 10
-INDEX_MAX           ?= 100
+INDEX_MAX           ?= 120
 INDEX_STEP          ?= 1
 RUNS                ?= 1000
 THREADS             ?= 0           # 0 = auto-detect hardware concurrency
 OUTDIR              ?=             # empty = each binary's own default (results_2d, ...)
 SEED                ?=             # empty = random seed
+RECORD_PATH         ?= 1           # 1 = dump one sample walker path per index (analytic engines)
+RECORD_DISTRIBUTION ?= 0           # 1 = write distribution_*.csv per index; 0 to skip (all engines)
 TEMPERATURE         ?= 1.0         # soft mode (doc section 1.8)
 DISTANCE_POWER      ?= 2.0         # soft mode
 DRAG_FORCE          ?= 0           # drag mode, 0..10000 (doc section 1.9)
 COVER               ?= 0           # 1 = enable disk-covering analysis (doc section 1.10)
 RHO                 ?= 0.01        # covering radius R(n) = RHO * n
 COVERAGE_FRACTION_2D ?= 0.5        # hull engine stopping fraction (2D doc default)
-COVERAGE_FRACTION_3D ?= 0.75       # hull engine stopping fraction (3D doc default)
+COVERAGE_FRACTION_3D ?= 0.5       # hull engine stopping fraction (3D doc default)
 INDEX               ?= 50          # mask-2d index
 INDEX3D             ?= 20          # mask-3d index
 SHELL_ONLY          ?= 1           # mask tools: 1 = boundary points only
@@ -143,7 +145,8 @@ run-2d: $(BIN)/walk2d
 	    --index-min=$(INDEX_MIN) --index-max=$(INDEX_MAX) --index-step=$(INDEX_STEP) \
 	    --runs=$(RUNS) --threads=$(THREADS) \
 	    --temperature=$(TEMPERATURE) --distance-power=$(DISTANCE_POWER) --drag-force=$(DRAG_FORCE) \
-	    --cover=$(COVER) --rho=$(RHO) $(outdir_flag) $(seed_flag); \
+	    --cover=$(COVER) --rho=$(RHO) --record-path=$(RECORD_PATH) --record-distribution=$(RECORD_DISTRIBUTION) \
+	    $(outdir_flag) $(seed_flag); \
 	done
 
 run-3d: $(BIN)/walk3d
@@ -154,7 +157,9 @@ run-3d: $(BIN)/walk3d
 	  echo "=== SHAPE3D=$$s ==="; \
 	  ./$(BIN)/walk3d --shape=$$s \
 	    --index-min=$(INDEX_MIN) --index-max=$(INDEX_MAX) --index-step=$(INDEX_STEP) \
-	    --runs=$(RUNS) --threads=$(THREADS) $(outdir_flag) $(seed_flag); \
+	    --runs=$(RUNS) --threads=$(THREADS) \
+	    --record-path=$(RECORD_PATH) --record-distribution=$(RECORD_DISTRIBUTION) \
+	    $(outdir_flag) $(seed_flag); \
 	done
 
 run-2d-hull: $(BIN)/hull2d
@@ -166,7 +171,7 @@ run-2d-hull: $(BIN)/hull2d
 	  ./$(BIN)/hull2d --shape=$$s \
 	    --index-min=$(INDEX_MIN) --index-max=$(INDEX_MAX) --index-step=$(INDEX_STEP) \
 	    --runs=$(RUNS) --threads=$(THREADS) --coverage-fraction=$(COVERAGE_FRACTION_2D) \
-	    $(outdir_flag) $(seed_flag); \
+	    --record-distribution=$(RECORD_DISTRIBUTION) $(outdir_flag) $(seed_flag); \
 	done
 
 run-3d-hull: $(BIN)/hull3d
@@ -178,7 +183,7 @@ run-3d-hull: $(BIN)/hull3d
 	  ./$(BIN)/hull3d --shape=$$s \
 	    --index-min=$(INDEX_MIN) --index-max=$(INDEX_MAX) --index-step=$(INDEX_STEP) \
 	    --runs=$(RUNS) --threads=$(THREADS) --coverage-fraction=$(COVERAGE_FRACTION_3D) \
-	    $(outdir_flag) $(seed_flag); \
+	    --record-distribution=$(RECORD_DISTRIBUTION) $(outdir_flag) $(seed_flag); \
 	done
 
 list-shapes-2d: $(BIN)/walk2d
@@ -236,6 +241,8 @@ help:
 	@echo "  TEMPERATURE/DISTANCE_POWER (soft mode)   DRAG_FORCE (drag mode)"
 	@echo "  COVER=1 RHO=...            (disk-covering analysis, run-2d only)"
 	@echo "  COVERAGE_FRACTION_2D/COVERAGE_FRACTION_3D (hull engines)"
+	@echo "  RECORD_PATH=0|1            (analytic engines only; default 1)"
+	@echo "  RECORD_DISTRIBUTION=0|1    Skip writing distribution_*.csv per index (default 1)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make run-2d SHAPE=HEXAGON MODE=soft TEMPERATURE=1.5 INDEX_MIN=20 INDEX_MAX=100"
@@ -248,3 +255,4 @@ help:
 	@echo "  make run-3d-hull HULLSHAPE3D=OCTAHEDRON"
 	@echo "  make mask-2d SHAPES=ALL SHELL_ONLY=1        # dump every 2D shape's boundary points"
 	@echo "  make mask-3d SHAPES3D=ALL SHELL_ONLY=1       # dump every 3D shape's boundary points"
+	@echo "  make run-2d SHAPES=ALL RECORD_DISTRIBUTION=0 RECORD_PATH=0   # summary CSV only, no per-run dumps"

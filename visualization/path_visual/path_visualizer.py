@@ -9,7 +9,10 @@ ROTATED_SQUARE, STRETCHED_ROTATED_SQUARE, BOWTIE, DOUBLE_BOWTIE,
 SLOTTED_RECT_30x10, V_NOTCH_RECT, SNOWFLAKE), each ported directly from that
 file's inBoundary formulas so the drawn outline matches the C++ engine
 exactly. shape_name accepts the same string the C++ --shape flag does
-(case-insensitively), e.g. "SQUARE" or "square".
+(case-insensitively), e.g. "SQUARE" or "square" -- though normally you
+don't set it directly: both shape_name and index are parsed from walk_file
+itself (see shape_and_index_from_filename below), so the drawn boundary
+can never drift out of sync with whichever run actually produced that file.
 
 get_shape_outlines() returns a *list* of (xs, ys) closed polylines rather
 than a single one: every shape but SNOWFLAKE returns a one-element list,
@@ -45,18 +48,71 @@ from matplotlib.patches import Circle
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
 
+# Mode suffixes the 2D engine can append (src/convex_2d/main.cpp's
+# modeName()); 3D filenames have no mode segment at all. Fixed, closed set,
+# so it's safe to strip one of these off the end without ever mistaking it
+# for part of a shape name (no ShapeType2D/ShapeType3D name ends in one of
+# these words).
+_KNOWN_MODES = {"hard", "soft", "drag"}
+
+
+def shape_and_index_from_filename(filename):
+    """
+    Parses both the shape name and size index out of a C++-generated
+    filename, e.g.:
+      path_SHARP_TRIANGLE_hard_50.txt      -> ("SHARP_TRIANGLE", 50)
+      path_SNOWFLAKE_hard_cover_75.txt     -> ("SNOWFLAKE", 75)
+      path_SLOTTED_RECT_30x10_soft_20.txt  -> ("SLOTTED_RECT_30x10", 20)
+      path_CUBE_20.txt (3D, no mode)       -> ("CUBE", 20)
+
+    The engines always build these as path_<SHAPE>_<MODE>[_cover]_<INDEX>.txt
+    (2D, see convex_2d/main.cpp's runTag + "_" + index) or
+    path_<SHAPE>_<INDEX>.txt (3D). SHAPE itself may contain underscores
+    (SHARP_TRIANGLE, V_NOTCH_RECT, SLOTTED_RECT_30x10, ...), so this can't
+    just split on a fixed underscore count -- instead it strips a trailing
+    numeric index, then an optional "cover" marker, then a mode name (each
+    from the fixed sets above/_KNOWN_MODES) off the *end*, and whatever is
+    left -- however many underscores it still has -- is the shape name.
+    """
+    stem = Path(filename).stem
+    parts = stem.split("_")
+
+    if not parts or parts[0] != "path":
+        raise ValueError(f"Expected a path_<SHAPE>..._<INDEX>.txt filename, got '{filename}'")
+    parts = parts[1:]
+
+    if not parts or not parts[-1].isdigit():
+        raise ValueError(f"Filename '{filename}' has no trailing numeric index")
+    index = int(parts.pop())
+
+    if parts and parts[-1] == "cover":
+        parts.pop()
+
+    if parts and parts[-1] in _KNOWN_MODES:
+        parts.pop()
+
+    if not parts:
+        raise ValueError(f"Filename '{filename}' has no shape name left after stripping suffixes")
+
+    return "_".join(parts), index
+
+
 # =============================
 # Configuration -- edit as needed
 # =============================
 show_cover = False
 DEFAULT_RADIUS = 0.03
-index = 50
-shape_name = "polygon8"  # any ShapeType2D name, e.g. "hexagon", "snowflake", "double_bowtie", ...
 
 # Matches the C++ naming convention path_{SHAPE}_{MODE}_{INDEX}.txt, e.g. the
 # file produced by `make run-2d SHAPE=SQUARE MODE=hard INDEX_MIN=50 INDEX_MAX=50`.
-walk_file = DATA_DIR / "path_POLYGON8_hard_50.txt"
+walk_file = DATA_DIR / "path_SHARP_TRIANGLE_hard_67.txt"
 cover_file = DATA_DIR / "cover.txt"
+
+# shape_name and index both drive the drawn boundary (see get_shape_outlines
+# below) and must match whatever walk_file above was actually generated
+# from, so both are read from the filename itself rather than kept as
+# separate hand-edited values that can silently drift out of sync with it.
+shape_name, index = shape_and_index_from_filename(walk_file)
 
 
 # =============================

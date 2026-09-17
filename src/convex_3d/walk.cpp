@@ -33,7 +33,7 @@ LatticePoint3D getNextPositionHard(LatticePoint3D pos, int index, ShapeType3D sh
 int walk(int index, ShapeType3D shape, WalkContext3D &ctx, std::vector<LatticePoint3D> *outPath)
 {
     const int shapePoints = getPointsInShape(index, shape);
-    const int target = shapePoints * 3 / 4; // doc section 1.6: 3D stops at 75%
+    const int target = shapePoints / 2; // 3D also stops at 50%
 
     LatticePoint3D pos;
     initialize(pos, shape, index, ctx.rng);
