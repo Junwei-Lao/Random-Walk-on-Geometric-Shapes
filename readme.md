@@ -149,3 +149,12 @@ found along the way (each documented at its fix site in the source):
   dumps across `data/` and two `visualization/` subfolders. The
   `visualization/` scripts read from `data/` accordingly, resolved relative
   to each script's own file location so it works from any working directory.
+- `SNOWFLAKE`'s area-normalization constant was 140.0, giving every
+  SNOWFLAKE shape only ~36% of its intended area at every index from 10 to
+  200 (a stable multiplicative error, not shrinking discretization noise --
+  unlike every other shape's ratio, which converges to 1.0 as the index
+  grows). The true union area of the fractal's 239 rectangles, computed
+  exactly in rational arithmetic, is `4075589/80000 = 50.9448625`; fixed in
+  both `src/convex_2d/shapes.cpp` (`kSnowflakeShapeFactor`) and
+  `path_visualizer.py`'s matching rectangle generator, which must stay in
+  sync with it.

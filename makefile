@@ -34,7 +34,7 @@ OBJDIR := obj
 BIN   := bin
 
 # ---- Run parameters: override on the command line ----
-SHAPE               ?= POLYGON15      # convex_2d shape name (make list-shapes-2d)
+SHAPE               ?= SQUARE    # convex_2d shape name (make list-shapes-2d)
 SHAPE3D             ?= CUBE      # convex_3d shape name (make list-shapes-3d)
 HULLSHAPE2D         ?= SQUARE      # convex_2d_convexhull shape name (make list-shapes-2d-hull)
 HULLSHAPE3D         ?= CUBE        # convex_3d_convexhull shape name (make list-shapes-3d-hull)
@@ -194,10 +194,20 @@ list-shapes-3d-hull: $(BIN)/hull3d
 	./$(BIN)/hull3d --list-shapes
 
 mask-2d: $(BIN)/mask2d
-	./$(BIN)/mask2d --shape=$(SHAPE) --index=$(INDEX) --shell=$(SHELL_ONLY) $(outdir_flag)
+	@set -e; \
+	shapes="$(if $(SHAPES),$(SHAPES),$(SHAPE))"; \
+	if [ "$$shapes" = "ALL" ]; then shapes=$$(./$(BIN)/mask2d --list-shapes); fi; \
+	for s in $$shapes; do \
+	  ./$(BIN)/mask2d --shape=$$s --index=$(INDEX) --shell=$(SHELL_ONLY) $(outdir_flag); \
+	done
 
 mask-3d: $(BIN)/mask3d
-	./$(BIN)/mask3d --shape=$(SHAPE3D) --index=$(INDEX3D) --shell=$(SHELL_ONLY) $(outdir_flag)
+	@set -e; \
+	shapes="$(if $(SHAPES3D),$(SHAPES3D),$(SHAPE3D))"; \
+	if [ "$$shapes" = "ALL" ]; then shapes=$$(./$(BIN)/mask3d --list-shapes); fi; \
+	for s in $$shapes; do \
+	  ./$(BIN)/mask3d --shape=$$s --index=$(INDEX3D) --shell=$(SHELL_ONLY) $(outdir_flag); \
+	done
 
 clean:
 	rm -rf $(OBJDIR) $(BIN)
@@ -220,7 +230,7 @@ help:
 	@echo "Key variables (override on the command line):"
 	@echo "  SHAPE=$(SHAPE) SHAPE3D=$(SHAPE3D) HULLSHAPE2D=$(HULLSHAPE2D) HULLSHAPE3D=$(HULLSHAPE3D)"
 	@echo "  SHAPES/SHAPES3D/HULLSHAPES2D/HULLSHAPES3D  space-separated list (or ALL) to sweep"
-	@echo "                             multiple shapes in one run-* invocation instead of SHAPE"
+	@echo "                             multiple shapes in one run-*/mask-* invocation instead of SHAPE"
 	@echo "  MODE=hard|soft|drag        (run-2d only; drag requires SHAPE=SQUARE)"
 	@echo "  INDEX_MIN/INDEX_MAX/INDEX_STEP/RUNS/THREADS/OUTDIR/SEED"
 	@echo "  TEMPERATURE/DISTANCE_POWER (soft mode)   DRAG_FORCE (drag mode)"
@@ -236,3 +246,5 @@ help:
 	@echo "  make run-3d SHAPE3D=PYRAMID INDEX_MIN=10 INDEX_MAX=60"
 	@echo "  make run-2d-hull HULLSHAPE2D=HEXAGON"
 	@echo "  make run-3d-hull HULLSHAPE3D=OCTAHEDRON"
+	@echo "  make mask-2d SHAPES=ALL SHELL_ONLY=1        # dump every 2D shape's boundary points"
+	@echo "  make mask-3d SHAPES3D=ALL SHELL_ONLY=1       # dump every 3D shape's boundary points"

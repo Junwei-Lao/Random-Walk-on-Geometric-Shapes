@@ -376,13 +376,22 @@ def _emit_cross_fractal_outward(rects, cx, cy, arm, thk, parentx, parenty, depth
     try_recurse(cx, cy - arm)
 
 
+# Area-normalization constant for SNOWFLAKE: the true union area of the
+# a=1 fractal (computed exactly in rational arithmetic over all 239
+# rectangles) is 4075589/80000 = 50.9448625, not the 140 originally used
+# here -- see the matching constant's comment in src/convex_2d/shapes.cpp
+# for how that was found and why it mattered (using 140 made every
+# SNOWFLAKE shape only ~36% of its intended area).
+SNOWFLAKE_SHAPE_FACTOR = 50.9448625
+
+
 def snowflake_rectangles(index: float):
     """Returns the list of (x0, x1, y0, y1) rectangles whose union is
     SNOWFLAKE, matching src/convex_2d/shapes.cpp's SNOWFLAKE case exactly:
     two hub crosses joined by a connector bar, each hub's three outer
     endpoints growing a recursive "+"-fractal that only branches away from
     its parent cross center."""
-    a = math.sqrt(math.pi / 140.0) * index
+    a = math.sqrt(math.pi / SNOWFLAKE_SHAPE_FACTOR) * index
 
     hub_thk = 1.0 * a
     hub_arm = 2.0 * a

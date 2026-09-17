@@ -55,6 +55,19 @@ namespace
 
 constexpr double MARGIN = 20.0;
 
+// SNOWFLAKE's area-normalization constant: with a = sqrt(PI / kSnowflakeShapeFactor)
+// * index, the fractal's true (rectangle-union) area equals PI * index^2 only if
+// kSnowflakeShapeFactor equals the union area of the a=1 fractal itself. That was
+// previously hard-coded as 140.0, an apparent estimate that was never actually
+// checked against the geometry as coded (hubThk=1, hubArm=2, connectorLen=1.6,
+// depth=3, scaleLen=0.55, scaleThk=0.50, endArm0=1.9, endThk0=0.55, all below) --
+// the real value, computed exactly in rational arithmetic by summing the union of
+// all 239 rectangles at a=1, is 4075589/80000 = 50.9448625. Using 140 made every
+// SNOWFLAKE run simulate a shape with only ~36% of its intended area (confirmed
+// empirically: the walker's own point count matched this ratio at every index
+// from 10 to 100, a stable multiplicative error rather than a discretization one).
+constexpr double kSnowflakeShapeFactor = 50.9448625;
+
 double regularPolygonCircumradius(int index, int N)
 {
     return index * std::sqrt((2.0 * PI) / (N * std::sin(2.0 * PI / N)));
@@ -239,7 +252,7 @@ BBox2D computeBBox(ShapeType2D shape, int index)
     }
     case ShapeType2D::SNOWFLAKE:
     {
-        double a = std::sqrt(PI / 140.0) * index;
+        double a = std::sqrt(PI / kSnowflakeShapeFactor) * index;
         return {80.0 * a, 80.0 * a};
     }
     }
@@ -406,7 +419,7 @@ bool inBoundary(int x, int y, int index, ShapeType2D shape)
         // endpoints grow a recursive "+"-fractal that only branches away
         // from its parent cross center (never folding back over its own
         // branch).
-        const double a = std::sqrt(PI / 140.0) * index;
+        const double a = std::sqrt(PI / kSnowflakeShapeFactor) * index;
 
         const double hubThk = 1.0 * a;
         const double hubArm = 2.0 * a;
