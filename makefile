@@ -47,13 +47,13 @@ HULLSHAPES2D        ?=
 HULLSHAPES3D        ?=
 MODE                ?= hard        # hard | soft | drag (drag requires SHAPE=SQUARE)
 INDEX_MIN           ?= 10
-INDEX_MAX           ?= 120
+INDEX_MAX           ?= 80
 INDEX_STEP          ?= 1
 RUNS                ?= 1000
 THREADS             ?= 0           # 0 = auto-detect hardware concurrency
 OUTDIR              ?=             # empty = each binary's own default (results_2d, ...)
 SEED                ?=             # empty = random seed
-RECORD_PATH         ?= 1           # 1 = dump one sample walker path per index (analytic engines)
+RECORD_PATH         ?= 0           # 1 = dump one sample walker path per index (analytic engines)
 RECORD_DISTRIBUTION ?= 0           # 1 = write distribution_*.csv per index; 0 to skip (all engines)
 TEMPERATURE         ?= 1.0         # soft mode (doc section 1.8)
 DISTANCE_POWER      ?= 2.0         # soft mode
