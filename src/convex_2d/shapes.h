@@ -19,6 +19,29 @@
 
 extern const double PI;
 
+// SNOWFLAKE's two fractal-derived normalization constants, shared between
+// inBoundary/computeBBox (shapes.cpp) and tools/compute_perimeter_2d.cpp so
+// there is exactly one definition of each rather than separate literals that
+// could silently drift apart. Both are for the a=1 fractal (see shapes.cpp's
+// SNOWFLAKE case for the geometry itself: two hub crosses joined by a
+// connector bar, each growing a depth-3 recursive "+"-fractal).
+//
+// kSnowflakeShapeFactor: with a = sqrt(PI / kSnowflakeShapeFactor) * index,
+// the fractal's true (rectangle-union) area equals PI * index^2. Computed
+// exactly in rational arithmetic over the a=1 fractal's 239 rectangles:
+// 4075589/80000 = 50.9448625. (A prior value of 140.0 here was an apparent
+// estimate that was never checked against the geometry as coded -- it made
+// every SNOWFLAKE shape only ~36% of its intended area.)
+//
+// kSnowflakeUnitPerimeter: the a=1 fractal's true perimeter (boundary length
+// of the rectangle union, not the sum of each rectangle's own perimeter).
+// Computed exactly via a coordinate-compression grid over the union (cell
+// boundaries fall exactly on rectangle edges, so the grid has zero
+// discretization error): 261639/1000 = 261.639. The fractal's perimeter at
+// any index is then kSnowflakeUnitPerimeter * a.
+constexpr double kSnowflakeShapeFactor = 50.9448625;
+constexpr double kSnowflakeUnitPerimeter = 261.639;
+
 enum class ShapeType2D
 {
     CIRCLE,

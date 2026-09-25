@@ -65,6 +65,7 @@ COVERAGE_FRACTION_3D ?= 0.5       # hull engine stopping fraction (3D doc defaul
 INDEX               ?= 50          # mask-2d index
 INDEX3D             ?= 20          # mask-3d index
 SHELL_ONLY          ?= 1           # mask tools: 1 = boundary points only
+PERIMETER_SHAPE     ?= ALL         # perimeter-2d: shape name, or ALL (default) for every 2D shape
 
 seed_flag = $(if $(SEED),--seed=$(SEED))
 outdir_flag = $(if $(OUTDIR),--outdir=$(OUTDIR))
@@ -72,13 +73,13 @@ outdir_flag = $(if $(OUTDIR),--outdir=$(OUTDIR))
 .PHONY: all build clean help \
         run-2d run-3d run-2d-hull run-3d-hull \
         list-shapes-2d list-shapes-3d list-shapes-2d-hull list-shapes-3d-hull \
-        mask-2d mask-3d
+        mask-2d mask-3d perimeter-2d
 
 .DEFAULT_GOAL := help
 
 all: build
 
-build: $(BIN)/walk2d $(BIN)/walk3d $(BIN)/hull2d $(BIN)/hull3d $(BIN)/mask2d $(BIN)/mask3d
+build: $(BIN)/walk2d $(BIN)/walk3d $(BIN)/hull2d $(BIN)/hull3d $(BIN)/mask2d $(BIN)/mask3d $(BIN)/perimeter2d
 
 $(BIN) $(OBJDIR):
 	mkdir -p $@
@@ -133,6 +134,10 @@ $(BIN)/mask2d: tools/generate_mask_2d.cpp src/convex_2d/shapes.cpp src/convex_2d
 
 $(BIN)/mask3d: tools/generate_mask_3d.cpp src/convex_3d/shapes.cpp src/convex_3d/shapes.h src/convex_3d/hash.h src/common/cli_args.h | $(BIN)
 	$(CXX) $(CXXFLAGS) tools/generate_mask_3d.cpp src/convex_3d/shapes.cpp -o $@
+
+# ---------------- Isoperimetric analysis tool ----------------
+$(BIN)/perimeter2d: tools/compute_perimeter_2d.cpp src/convex_2d/shapes.cpp src/convex_2d/shapes.h src/convex_2d/hash.h src/common/cli_args.h | $(BIN)
+	$(CXX) $(CXXFLAGS) tools/compute_perimeter_2d.cpp src/convex_2d/shapes.cpp -o $@
 
 # ---------------- Run targets ----------------
 run-2d: $(BIN)/walk2d
@@ -214,6 +219,13 @@ mask-3d: $(BIN)/mask3d
 	  ./$(BIN)/mask3d --shape=$$s --index=$(INDEX3D) --shell=$(SHELL_ONLY) $(outdir_flag); \
 	done
 
+# Isoperimetric ratio P/sqrt(A) for every 2D shape in one CSV (data/isoperimetric_2d.csv
+# by default). This ratio is scale-invariant (see tools/compute_perimeter_2d.cpp) and the
+# binary computes every shape in one process (no bash loop needed), so PERIMETER_SHAPE
+# (default ALL) is its own variable rather than reusing SHAPE/SHAPES's SQUARE default.
+perimeter-2d: $(BIN)/perimeter2d
+	./$(BIN)/perimeter2d --shape=$(PERIMETER_SHAPE) --index=$(INDEX) $(outdir_flag)
+
 clean:
 	rm -rf $(OBJDIR) $(BIN)
 
@@ -230,6 +242,7 @@ help:
 	@echo "  make run-2d-hull        2D convex-hull engine (CGAL)"
 	@echo "  make run-3d-hull        3D convex-hull engine (CGAL)"
 	@echo "  make mask-2d / mask-3d  Dump a shape's interior lattice points to a text file"
+	@echo "  make perimeter-2d       Isoperimetric ratio P/sqrt(A) for every 2D shape (one CSV)"
 	@echo "  make list-shapes-2d / list-shapes-3d / list-shapes-2d-hull / list-shapes-3d-hull"
 	@echo ""
 	@echo "Key variables (override on the command line):"
@@ -255,4 +268,5 @@ help:
 	@echo "  make run-3d-hull HULLSHAPE3D=OCTAHEDRON"
 	@echo "  make mask-2d SHAPES=ALL SHELL_ONLY=1        # dump every 2D shape's boundary points"
 	@echo "  make mask-3d SHAPES3D=ALL SHELL_ONLY=1       # dump every 3D shape's boundary points"
+	@echo "  make perimeter-2d                            # isoperimetric_2d.csv for every 2D shape"
 	@echo "  make run-2d SHAPES=ALL RECORD_DISTRIBUTION=0 RECORD_PATH=0   # summary CSV only, no per-run dumps"
