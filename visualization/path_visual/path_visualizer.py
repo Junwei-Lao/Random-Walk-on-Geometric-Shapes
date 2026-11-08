@@ -26,11 +26,21 @@ generator had a real bug fixed during that merge: its xs list had 9 points
 but its ys list had 13, which would raise from plt.plot() -- it never
 surfaced because that script only ever printed the lists, never plotted them.
 
-Note: the current C++ engine's disk-covering analysis (src/convex_2d/cover.cpp)
-only tracks a coverage *fraction*, not individual disk-center coordinates, so
-it no longer emits a "cover.txt"-style file for show_cover=True to read here.
-Set show_cover=False (or point cover_file at your own disk-center dump) if
-you don't have one.
+With COVER=1 (and RECORD_COVER=1, the default) the 2D engine writes
+cover_<SHAPE>_<MODE>_cover[_T<TEMP>]_R<RHO>_<INDEX>.txt next to each path file, for
+the same sampled run: the first line is the covering radius R(n), and every
+following line is one disk center "x y". cover_file below is derived from
+walk_file, so set show_cover=True to overlay the disks.
+
+3D paths (the 3D engine writes "x y z" per line) are detected from the
+column count and drawn by plot_3d() instead: the shape as a wireframe
+(polyhedron edges, or three great circles plus latitude rings for SPHERE),
+ported from src/convex_3d/shapes.cpp, and the path as a line colored from
+start to end, since in 3D individual points hide each other. With
+show_projections=True the 3D view gets three flat xy/xz/yz projections next
+to it, which show depth much more clearly than a static 3D view. Points the
+walker visited outside the shape (soft mode) are marked separately. Drag in
+the 3D panel to rotate.
 
 All C++ engines save their output (CSVs and sample walker paths alike) into
 data/ at the repo root (see the makefile's OUTDIR / each binary's --outdir
@@ -39,10 +49,14 @@ so it resolves correctly no matter what directory you run the script from.
 """
 
 import math
+import re
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.collections import LineCollection
 from matplotlib.patches import Circle
+from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
 # repo_root/visualization/path_visual/path_visualizer.py -> repo_root/data
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
@@ -63,14 +77,20 @@ def shape_and_index_from_filename(filename):
       path_SHARP_TRIANGLE_hard_50.txt      -> ("SHARP_TRIANGLE", 50)
       path_SNOWFLAKE_hard_cover_75.txt     -> ("SNOWFLAKE", 75)
       path_SLOTTED_RECT_30x10_soft_20.txt  -> ("SLOTTED_RECT_30x10", 20)
-      path_CUBE_20.txt (3D, no mode)       -> ("CUBE", 20)
+      path_SQUARE_soft_cover_T0.5_R0.1_40.txt -> ("SQUARE", 40)
+      path_CUBE_20.txt (3D hard, no mode)  -> ("CUBE", 20)
+      path_CUBE_soft_T0.5_20.txt (3D soft) -> ("CUBE", 20)
 
-    The engines always build these as path_<SHAPE>_<MODE>[_cover]_<INDEX>.txt
-    (2D, see convex_2d/main.cpp's runTag + "_" + index) or
-    path_<SHAPE>_<INDEX>.txt (3D). SHAPE itself may contain underscores
+    The engines always build these as
+    path_<SHAPE>_<MODE>[_cover][_T<TEMP>][_R<RHO>]_<INDEX>.txt (2D, see
+    convex_2d/main.cpp's pointTag + "_" + index), path_<SHAPE>_<INDEX>.txt
+    (3D hard) or path_<SHAPE>_soft_T<TEMP>_<INDEX>.txt (3D soft). SHAPE itself
+    may contain underscores
     (SHARP_TRIANGLE, V_NOTCH_RECT, SLOTTED_RECT_30x10, ...), so this can't
     just split on a fixed underscore count -- instead it strips a trailing
-    numeric index, then an optional "cover" marker, then a mode name (each
+    numeric index, then an optional covering "R<RHO>" tag, then an optional
+    soft-mode "T<TEMP>" temperature tag, then
+    an optional "cover" marker, then a mode name (each
     from the fixed sets above/_KNOWN_MODES) off the *end*, and whatever is
     left -- however many underscores it still has -- is the shape name.
     """
@@ -84,6 +104,12 @@ def shape_and_index_from_filename(filename):
     if not parts or not parts[-1].isdigit():
         raise ValueError(f"Filename '{filename}' has no trailing numeric index")
     index = int(parts.pop())
+
+    if parts and re.fullmatch(r"R[0-9.eE+-]+", parts[-1]):
+        parts.pop()
+
+    if parts and re.fullmatch(r"T[0-9.eE+-]+", parts[-1]):
+        parts.pop()
 
     if parts and parts[-1] == "cover":
         parts.pop()
@@ -103,10 +129,18 @@ def shape_and_index_from_filename(filename):
 show_cover = False
 DEFAULT_RADIUS = 0.03
 
+# 3D only: add xy/xz/yz projection panels next to the 3D view, and thin very
+# long paths down to about this many points so the 3D view stays responsive
+# when rotated (None draws every point).
+show_projections = True
+max_path_points_3d = 60000
+
 # Matches the C++ naming convention path_{SHAPE}_{MODE}_{INDEX}.txt, e.g. the
 # file produced by `make run-2d SHAPE=SQUARE MODE=hard INDEX_MIN=50 INDEX_MAX=50`.
+# 3D paths work the same way, e.g. path_CUBE_20.txt or path_CUBE_soft_T1_20.txt.
 walk_file = DATA_DIR / "path_SHARP_TRIANGLE_hard_67.txt"
-cover_file = DATA_DIR / "cover.txt"
+# Same sampled run as walk_file: path_<...>.txt -> cover_<...>.txt.
+cover_file = walk_file.with_name("cover_" + walk_file.name[len("path_"):])
 
 # shape_name and index both drive the drawn boundary (see get_shape_outlines
 # below) and must match whatever walk_file above was actually generated
@@ -119,19 +153,29 @@ shape_name, index = shape_and_index_from_filename(walk_file)
 # File readers
 # =============================
 def read_walked_points(filename: str):
-    xs, ys = [], []
+    """Returns one list per coordinate column: (xs, ys) for a 2D path file,
+    (xs, ys, zs) for a 3D one."""
+    rows = []
     with open(filename, "r") as f:
         for line in f:
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            x, y = map(float, line.split())
-            xs.append(x)
-            ys.append(y)
-    return xs, ys
+            rows.append(tuple(map(float, line.split())))
+    if not rows:
+        raise ValueError(f"No points in '{filename}'")
+    dim = len(rows[0])
+    if dim not in (2, 3) or any(len(r) != dim for r in rows):
+        raise ValueError(f"'{filename}' must have 2 or 3 columns on every line")
+    return tuple(list(col) for col in zip(*rows))
 
 
 def read_cover_centers(filename: str, default_radius: float = DEFAULT_RADIUS):
+    """
+    Reads a cover_*.txt file: a single-number line is the covering radius
+    (the engine writes it first), every "x y" line is one disk center. A
+    legacy "# radius=R" comment line is also accepted.
+    """
     xs, ys = [], []
     radius = default_radius
 
@@ -151,7 +195,12 @@ def read_cover_centers(filename: str, default_radius: float = DEFAULT_RADIUS):
             if line.startswith("#"):
                 continue
 
-            x, y = map(float, line.split())
+            fields = line.split()
+            if len(fields) == 1:
+                radius = float(fields[0])
+                continue
+
+            x, y = map(float, fields)
             xs.append(x)
             ys.append(y)
 
@@ -537,11 +586,187 @@ def get_shape_outlines(shape_name: str, index: float):
 
 
 # =============================
+# 3D shapes -- each one ported directly from the matching inBoundary case in
+# src/convex_3d/shapes.cpp. Every 3D shape is centered at the origin except
+# PYRAMID, whose base sits on z = 0.
+# =============================
+def _cube_half_side(index):
+    return (4.0 * math.pi / 3.0) ** (1.0 / 3.0) * index / 2.0
+
+
+def _prism_halves(index):
+    c = (2.0 * math.pi / 9.0) ** (1.0 / 3.0) * index
+    return c / 2.0, c, 1.5 * c
+
+
+def _octahedron_vertex(index):
+    side = index * (math.sqrt(8.0) * math.pi) ** (1.0 / 3.0)
+    return side / math.sqrt(2.0)
+
+
+def _pyramid_base_side(index):
+    return index * (4.0 * math.pi) ** (1.0 / 3.0)
+
+
+def in_boundary_3d(xs, ys, zs, shape_name: str, index: float):
+    """Vectorized port of the C++ inBoundary: boolean array, True = inside."""
+    x, y, z = (np.asarray(v, dtype=float) for v in (xs, ys, zs))
+    s = shape_name.strip().lower()
+    if s == "sphere":
+        return x * x + y * y + z * z <= index * index
+    if s == "octahedron":
+        return np.abs(x) + np.abs(y) + np.abs(z) <= _octahedron_vertex(index)
+    if s == "cube":
+        h = _cube_half_side(index)
+        return (np.abs(x) <= h) & (np.abs(y) <= h) & (np.abs(z) <= h)
+    if s == "rectangular_prism_1_2_3":
+        hx, hy, hz = _prism_halves(index)
+        return (np.abs(x) <= hx) & (np.abs(y) <= hy) & (np.abs(z) <= hz)
+    if s == "pyramid":
+        b = _pyramid_base_side(index)
+        taper = (b / 2.0) * (1.0 - z / b)
+        return (z >= 0) & (z <= b) & (np.abs(x) <= taper) & (np.abs(y) <= taper)
+    raise ValueError(f"Unknown 3D shape_name='{shape_name}'.")
+
+
+def _edges_to_polylines(vertices, edges):
+    return [tuple(list(c) for c in zip(vertices[i], vertices[j])) for i, j in edges]
+
+
+def _box_polylines(hx, hy, hz):
+    v = [(sx * hx, sy * hy, sz * hz) for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)]
+    # Two box corners share an edge iff they differ in exactly one coordinate sign.
+    edges = [(i, j) for i in range(8) for j in range(i + 1, 8)
+             if sum(a != b for a, b in zip(v[i], v[j])) == 1]
+    return _edges_to_polylines(v, edges)
+
+
+def get_shape_edges_3d(shape_name: str, index: float, num_pts: int = 180):
+    """List of (xs, ys, zs) polylines tracing the shape's wireframe."""
+    s = shape_name.strip().lower()
+    if s == "sphere":
+        r = float(index)
+        t = [2.0 * math.pi * i / num_pts for i in range(num_pts + 1)]
+        lines = []
+        # Latitude rings (the z = 0 one is the xy great circle).
+        for zr in (-0.75, -0.4, 0.0, 0.4, 0.75):
+            z0 = zr * r
+            rr = math.sqrt(r * r - z0 * z0)
+            lines.append(([rr * math.cos(a) for a in t], [rr * math.sin(a) for a in t], [z0] * len(t)))
+        # xz and yz great circles.
+        lines.append(([r * math.cos(a) for a in t], [0.0] * len(t), [r * math.sin(a) for a in t]))
+        lines.append(([0.0] * len(t), [r * math.cos(a) for a in t], [r * math.sin(a) for a in t]))
+        return lines
+    if s == "octahedron":
+        a = _octahedron_vertex(index)
+        v = [(a, 0, 0), (-a, 0, 0), (0, a, 0), (0, -a, 0), (0, 0, a), (0, 0, -a)]
+        # Every pair of vertices not on the same axis is an edge.
+        edges = [(i, j) for i in range(6) for j in range(i + 1, 6) if i // 2 != j // 2]
+        return _edges_to_polylines(v, edges)
+    if s == "cube":
+        h = _cube_half_side(index)
+        return _box_polylines(h, h, h)
+    if s == "rectangular_prism_1_2_3":
+        return _box_polylines(*_prism_halves(index))
+    if s == "pyramid":
+        b = _pyramid_base_side(index)
+        hb = b / 2.0
+        v = [(-hb, -hb, 0), (hb, -hb, 0), (hb, hb, 0), (-hb, hb, 0), (0, 0, b)]
+        edges = [(0, 1), (1, 2), (2, 3), (3, 0), (0, 4), (1, 4), (2, 4), (3, 4)]
+        return _edges_to_polylines(v, edges)
+    raise ValueError(f"Unknown 3D shape_name='{shape_name}'.")
+
+
+def plot_3d(walk_x, walk_y, walk_z):
+    pts = np.column_stack([walk_x, walk_y, walk_z])
+    total = len(pts)
+
+    inside = in_boundary_3d(pts[:, 0], pts[:, 1], pts[:, 2], shape_name, index)
+    outside = np.unique(pts[~inside], axis=0)
+    edges = get_shape_edges_3d(shape_name, index)
+
+    # One segment per actual unit step, colored by how far along the walk it
+    # is (dark = start, yellow = end). Thinning keeps every k-th real step
+    # rather than joining every k-th point, which would draw diagonal moves
+    # the walker never made.
+    segs = np.stack([pts[:-1], pts[1:]], axis=1)
+    progress = np.linspace(0.0, 1.0, max(len(segs), 1))
+    if max_path_points_3d and len(segs) > max_path_points_3d:
+        stride = math.ceil(len(segs) / max_path_points_3d)
+        segs, progress = segs[::stride], progress[::stride]
+        print(f"Path has {total} points; drawing 1 in every {stride} steps "
+              f"(set max_path_points_3d = None to draw all).")
+    cmap = plt.get_cmap("viridis")
+
+    if show_projections:
+        fig = plt.figure(figsize=(14, 11))
+        ax3d = fig.add_subplot(2, 2, 1, projection="3d")
+        proj_axes = [(fig.add_subplot(2, 2, k), i, j, f"{'xyz'[i]}{'xyz'[j]}")
+                     for k, (i, j) in zip((2, 3, 4), ((0, 1), (0, 2), (1, 2)))]
+    else:
+        fig = plt.figure(figsize=(10, 9))
+        ax3d = fig.add_subplot(1, 1, 1, projection="3d")
+        proj_axes = []
+
+    for k, (ex, ey, ez) in enumerate(edges):
+        ax3d.plot(ex, ey, ez, color="black", linewidth=1.2, alpha=0.7,
+                  label="Shape boundary" if k == 0 else None)
+    lc = Line3DCollection(segs, cmap=cmap, linewidths=0.6, alpha=0.8)
+    lc.set_array(progress)
+    ax3d.add_collection(lc)
+    ax3d.scatter(*pts[0], color="lime", edgecolor="black", s=60, label="Start", depthshade=False)
+    ax3d.scatter(*pts[-1], color="red", edgecolor="black", s=60, label="End", depthshade=False)
+    if len(outside):
+        ax3d.scatter(outside[:, 0], outside[:, 1], outside[:, 2], color="magenta", s=4,
+                     label=f"Outside shape ({len(outside)} pts)", depthshade=False)
+
+    # Equal scale on all three axes so the shape isn't distorted.
+    all_pts = np.vstack([pts] + [np.column_stack(e) for e in edges])
+    lo, hi = all_pts.min(axis=0) - 1.0, all_pts.max(axis=0) + 1.0
+    ax3d.set_xlim(lo[0], hi[0])
+    ax3d.set_ylim(lo[1], hi[1])
+    ax3d.set_zlim(lo[2], hi[2])
+    ax3d.set_box_aspect(hi - lo)
+    ax3d.set_xlabel("x")
+    ax3d.set_ylabel("y")
+    ax3d.set_zlabel("z")
+    ax3d.set_title(f"Walk on shape '{shape_name}' (index={index}, {total} points)")
+    ax3d.legend(loc="upper left", fontsize=8)
+
+    for ax, i, j, name in proj_axes:
+        for ec in edges:
+            ax.plot(ec[i], ec[j], color="black", linewidth=1.0, alpha=0.7)
+        plc = LineCollection(segs[:, :, [i, j]], cmap=cmap, linewidths=0.5, alpha=0.6)
+        plc.set_array(progress)
+        ax.add_collection(plc)
+        ax.scatter(pts[0, i], pts[0, j], color="lime", edgecolor="black", s=40, zorder=3)
+        ax.scatter(pts[-1, i], pts[-1, j], color="red", edgecolor="black", s=40, zorder=3)
+        if len(outside):
+            ax.scatter(outside[:, i], outside[:, j], color="magenta", s=3, zorder=2)
+        ax.set_xlim(lo[i], hi[i])
+        ax.set_ylim(lo[j], hi[j])
+        ax.set_aspect("equal", adjustable="box")
+        ax.set_xlabel(name[0])
+        ax.set_ylabel(name[1])
+        ax.set_title(f"{name} projection")
+        ax.grid(True, linestyle="--", alpha=0.4)
+
+    fig.colorbar(lc, ax=[ax3d] + [a[0] for a in proj_axes], shrink=0.6,
+                 label="Progress along walk (0 = start, 1 = end)")
+    plt.show()
+
+
+# =============================
 # Main plotting routine
 # =============================
 def main():
+    walk_cols = read_walked_points(walk_file)
+    if len(walk_cols) == 3:
+        plot_3d(*walk_cols)
+        return
+    walk_x, walk_y = walk_cols
+
     shape_outlines = get_shape_outlines(shape_name, index)
-    walk_x, walk_y = read_walked_points(walk_file)
 
     cover_x, cover_y, radius = [], [], DEFAULT_RADIUS
     if show_cover:
