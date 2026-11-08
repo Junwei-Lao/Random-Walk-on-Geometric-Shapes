@@ -12,6 +12,8 @@ results_2d/
 results_3d/
 results_2d_hull/
 results_3d_hull/
+data/
+data_saved/
 
 # Python cruft (visualization/ scripts)
 __pycache__/
