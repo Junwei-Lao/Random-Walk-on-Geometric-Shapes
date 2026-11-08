@@ -133,7 +133,7 @@ DEFAULT_RADIUS = 0.03
 # long paths down to about this many points so the 3D view stays responsive
 # when rotated (None draws every point).
 show_projections = True
-max_path_points_3d = 60000
+max_path_points_3d = 100000
 
 # Matches the C++ naming convention path_{SHAPE}_{MODE}_{INDEX}.txt, e.g. the
 # file produced by `make run-2d SHAPE=SQUARE MODE=hard INDEX_MIN=50 INDEX_MAX=50`.

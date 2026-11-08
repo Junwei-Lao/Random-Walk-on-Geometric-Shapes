@@ -100,7 +100,7 @@ struct ConnectedShape2D
 // component. This guards against fractal or thinly-pinched shapes (e.g.
 // SNOWFLAKE) whose rasterization can leave a handful of lattice points
 // isolated from the main body: a hard-boundary walk seeded on such an
-// island can never reach a 50%/75% mixing threshold defined over the whole
+// island can never reach a 50% mixing threshold defined over the whole
 // shape, since 4-connected moves can never leave the island (this would
 // violate Remark 1's "finite and connected" assumption and loop forever).
 // For every shape without such artifacts (the overwhelming majority), this

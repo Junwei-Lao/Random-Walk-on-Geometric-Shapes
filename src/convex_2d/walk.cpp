@@ -92,7 +92,7 @@ WalkResult2D walk(int index, ShapeType2D shape, const WalkParams2D &params,
     // to start in a smaller stray component. See buildConnectedShape.
     ConnectedShape2D cs = buildConnectedShape(index, shape);
     const int shapePoints = cs.pointCount;
-    const int target = shapePoints / 2; // doc section 1.6: 2D stops at 50%
+    const int target = shapePoints / 2; // 2D stops at 50%
     const int modulus = (params.mode == WalkMode2D::DRAG) ? squareLatticeModulus(index) : 0;
 
     LatticePoint2D pos = sampleUniform(cs, ctx.rng);

@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
     }
     if (params.mode == WalkMode2D::DRAG && shape != ShapeType2D::SQUARE)
     {
-        std::cerr << "MODE=drag is defined only for SHAPE=SQUARE (doc section 1.9).\n";
+        std::cerr << "MODE=drag is defined only for SHAPE=SQUARE.\n";
         return 1;
     }
 
@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
     params.distancePower = args.getDouble("distance-power", 2.0);
     params.dragForce = args.getDouble("drag-force", 0.0);
     params.enableCover = args.getBool("cover", false);
-    params.coverRho = args.getDouble("rho", 0.01);
+    params.coverRho = args.getDouble("rho", 0.1);
     // With covering on, every rho is its own grid point, just like the
     // temperatures above. Without covering, rho is meaningless.
     const bool sweepRho = params.enableCover;
@@ -315,7 +315,7 @@ int main(int argc, char *argv[])
                             }
                             else
                             {
-                                res = walk(index, shape, params, localCtx, nullptr);
+                                res = walk(index, shape, params, localCtx, nullptr, nullptr);
                             }
                             stepResults[runIndex] = static_cast<double>(res.steps);
                             diskResults[runIndex] = static_cast<double>(res.diskCount);

@@ -64,8 +64,8 @@ RECORD_COVER        ?= 1           # 1 = with COVER=1, dump cover_*.txt (radius,
 TEMPERATURE         ?= 0.5         # soft mode (doc section 1.8)
 # Space-separated soft-mode temperature sweep; when set, overrides TEMPERATURE
 # and maps out T_mix(n, T) over the whole INDEX x TEMPERATURES grid, e.g.
-#   make run-2d MODE=soft SHAPE=SQUARE TEMPERATURES="0.1 0.25 0.5 1 2 6"
-TEMPERATURES        ?= 0.1 0.25 0.5 1 2 6
+#   make run-2d MODE=soft SHAPE=SQUARE TEMPERATURES="0.1 0.25 0.5 1 2 8"
+TEMPERATURES        ?= 0.1 0.25 0.5 1 2 8
 DISTANCE_POWER      ?= 2.0         # soft mode
 DRAG_FORCE          ?= 0           # drag mode, 0..10000 (doc section 1.9)
 COVER               ?= 1           # 1 = enable disk-covering analysis (doc section 1.10)

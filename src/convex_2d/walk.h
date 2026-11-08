@@ -36,23 +36,23 @@ struct WalkParams2D
 {
     WalkMode2D mode = WalkMode2D::HARD;
 
-    // SOFT mode (doc eq. 4): w_i = exp(-d_i^distancePower / temperature).
+    // SOFT mode: w_i = exp(-d_i^distancePower / temperature).
     // The doc uses squared distance with a single fixed temperature.
     double temperature = 1.0;
     double distancePower = 2.0;
 
-    // DRAG mode (doc eq. 7/8): force applied to north and east, f in [0, 10000].
+    // DRAG mode: force applied to north and east, f in [0, 10000].
     double dragForce = 0.0;
 
-    // Disk-covering analysis (doc section 4.4), layered on top of any mode.
+    // Disk-covering analysis, layered on top of any mode.
     bool enableCover = false;
-    double coverRho = 0.01; // R(n) = coverRho * index
+    double coverRho = 0.1; // R(n) = coverRho * index
 };
 
 struct WalkResult2D
 {
     int steps = 0;
-    int diskCount = 0; // disks placed (doc eq. 12); valid only if params.enableCover
+    int diskCount = 0; // disks placed; valid only if params.enableCover
 };
 
 struct WalkContext2D
@@ -61,8 +61,8 @@ struct WalkContext2D
 };
 
 // Runs one random walk on `shape` at size index `index` until 50% of the
-// shape's interior lattice points have been visited (doc section 1.6).
-// DRAG mode requires shape == ShapeType2D::SQUARE (doc section 1.9).
+// shape's interior lattice points have been visited.
+// DRAG mode requires shape == ShapeType2D::SQUARE.
 // If non-null, outPath receives every position visited and outCoverCenters
 // the center of every covering disk placed (only when params.enableCover).
 WalkResult2D walk(int index, ShapeType2D shape, const WalkParams2D &params,
