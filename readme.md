@@ -47,6 +47,9 @@ data/                        Default output for all four engines and both
 visualization/
   path_visual/path_visualizer.py   Plots a shape boundary + a walked path
                                     (+ optional cover circles) from data/.
+                                    3D path files are detected automatically:
+                                    wireframe shape + rotatable 3D path, plus
+                                    xy/xz/yz projections.
   shell_visual/shell_visualizer.py Scatter-plots a 2D/3D point dump from data/.
 ```
 
@@ -69,6 +72,9 @@ flag -- override any of them on the command line:
 
 ```
 make run-2d SHAPE=HEXAGON MODE=soft TEMPERATURE=1.5 INDEX_MIN=20 INDEX_MAX=100
+# Soft mode over a temperature grid: one summary CSV with a row per (n, T),
+# columns Index,Temperature,Runs,MeanSteps,... -- i.e. T_mix(n, T).
+make run-2d SHAPES=HEXAGON MODE=soft TEMPERATURES="0.25 0.5 1 2 4"
 make run-2d SHAPE=SQUARE MODE=drag DRAG_FORCE=500
 make run-2d SHAPE=SNOWFLAKE COVER=1 RHO=0.02
 make run-3d SHAPE3D=PYRAMID INDEX_MIN=10 INDEX_MAX=60
@@ -84,6 +90,28 @@ make run-2d SHAPES=ALL              # every 2D shape
 make run-3d SHAPES3D=ALL            # every 3D shape
 make run-2d-hull HULLSHAPES2D=ALL
 make run-3d-hull HULLSHAPES3D=ALL
+
+# Any variable that takes ALL also takes ALL\NAME\NAME... to exclude shapes
+# (case-insensitive; an unknown name is an error). Quote it so the shell
+# keeps the backslash.
+make run-2d 'SHAPES=ALL\SNOWFLAKE'
+make run-2d 'SHAPES=ALL\SNOWFLAKE\BOWTIE'
+make perimeter-2d 'PERIMETER_SHAPE=ALL\CIRCLE'
+
+# Covering-radius sweep (COVER=1): RHOS overrides RHO, like TEMPERATURES does
+# TEMPERATURE. The summary gets a Rho column (after Temperature in soft mode),
+# one row per (n[, T], rho), and per-point files carry an _R<rho> tag.
+make run-2d SHAPES=SQUARE COVER=1 RHOS="0.05 0.1 0.2"
+make run-2d SHAPES=HEXAGON MODE=soft COVER=1 TEMPERATURES="0.5 2" RHOS="0.1 0.2"
+
+# 3D soft boundary: same exp(-d^p/T) rule over the 6 axis directions, with d
+# the 6-connected BFS distance back to the shape. MODE3D selects it; it shares
+# TEMPERATURE(S)/DISTANCE_POWER with 2D. Hard mode keeps summary_<SHAPE>.csv.
+make run-3d SHAPES3D=CUBE MODE3D=soft TEMPERATURES="0.25 1 4"
+
+# With COVER=1, each index also gets cover_<tag>_<INDEX>.txt for the same
+# sampled run as path_<tag>_<INDEX>.txt: first line is the covering radius
+# R(n), then one disk center "x y" per line. RECORD_COVER=0 turns it off.
 
 make list-shapes-2d         # print valid --shape values for each engine
 make list-shapes-3d
@@ -107,10 +135,14 @@ found along the way (each documented at its fix site in the source):
   compile-time macro; only an always-on toroidal+hardcoded-drag walk ran,
   for every shape, not just the square. All three modes are now real and
   independently selectable (`src/convex_2d/walk.cpp`).
-- The disk-covering analysis placed disks at a random offset from the
-  visited point rather than at the point itself, and didn't restrict
-  covered points to the shape's interior. Fixed to match the documented
-  definition exactly (`src/convex_2d/cover.cpp`).
+- The disk-covering analysis didn't restrict covered points to the shape's
+  interior; it now does (`src/convex_2d/cover.cpp`).
+- The disk-covering output (doc eq. 12) was the coverage fraction
+  |C_t|/|L(S)|. It is now phi = the number of disks placed per run, with a
+  disk placed only when the walker steps on a point not already covered by
+  an existing disk; summaries report `MeanDisks,StdDevDisks`. Each disk's
+  center is a real-valued point drawn uniformly within R(n) of that visited
+  point (it may fall outside the shape), so cover_*.txt centers are decimal.
 - `SNOWFLAKE`'s thin fractal geometry can rasterize to a handful of lattice
   points disconnected from the main body; a hard-boundary walk seeded there
   would loop forever. The walk now seeds from (and measures against) only

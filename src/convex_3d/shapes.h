@@ -46,4 +46,10 @@ void boundingBox(int index, ShapeType3D shape, int &xMin, int &xMax, int &yMin, 
 
 void initialize(LatticePoint3D &start, ShapeType3D shape, int index, std::mt19937_64 &rng);
 
+// Lattice-step (6-connected) distance from `from` to the nearest interior
+// point of the shape, found by BFS; 0 if `from` is already interior. The 3D
+// counterpart of convex_2d's distanceToShape, used by the soft-boundary walk
+// to compute the return distance d(q).
+int distanceToShape(LatticePoint3D from, int index, ShapeType3D shape);
+
 #endif // CONVEX_3D_SHAPES_H

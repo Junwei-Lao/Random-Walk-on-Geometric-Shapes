@@ -8,9 +8,9 @@
 | -------- | ------- | ------- |
 | Hard Boundary Random Walk (Convex Shapes)  | Y    | Y    |
 | Hard Boundary Random Walk (Non-convex Shapes)  | Y    | N    |
-| Soft Boundary Random Walk (Convex Shapes)  | Y     | N    |
+| Soft Boundary Random Walk (Convex Shapes)  | Y     | Y    |
 | Soft Boundary Random Walk (Non-convex Shapes)  | Y    | N    |
 | Drag Random Walk    | O    | N    |
 | Disk Covering    | Y    | N    |
 | Shell Visualization    | Y    | Y    |
-| Path Visualization    | Y    | N    |
+| Path Visualization    | Y    | Y    |

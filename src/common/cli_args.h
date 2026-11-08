@@ -10,9 +10,12 @@
 // the Makefile is the single place that lists which shape/mode/index range
 // to run -- nothing is hard-coded inside the .cpp files.
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <system_error>
 #include <unordered_map>
@@ -124,6 +127,98 @@ inline RunStats computeStats(const std::vector<double> &values)
     }
     s.stddev = std::sqrt(sq / static_cast<double>(values.size()));
     return s;
+}
+
+// Parses a comma-separated list of numbers, e.g. "0.25,0.5,1,2" (the form
+// the Makefile passes for TEMPERATURES / RHOS). Returns false on any
+// malformed or empty entry.
+inline bool parseDoubleList(const std::string &s, std::vector<double> &out)
+{
+    out.clear();
+    std::stringstream ss(s);
+    std::string cell;
+    while (std::getline(ss, cell, ','))
+    {
+        try
+        {
+            std::size_t used = 0;
+            double v = std::stod(cell, &used);
+            if (used != cell.size())
+                return false;
+            out.push_back(v);
+        }
+        catch (...)
+        {
+            return false;
+        }
+    }
+    return !out.empty();
+}
+
+// Shortest round-trippable-enough form for file-name tags ("0.5", "1", "2.5").
+inline std::string formatNumber(double v)
+{
+    std::ostringstream os;
+    os << v;
+    return os.str();
+}
+
+// True if `filename` is missing or its header line is exactly `header`. A
+// sweep appends to an existing summary, so a header mismatch (e.g. a file
+// written before a Rho/Temperature column existed) must stop the run rather
+// than mix two column layouts in one CSV.
+inline bool summaryHeaderMatches(const std::string &filename, const std::string &header)
+{
+    std::ifstream in(filename);
+    if (!in)
+        return true;
+    std::string line;
+    std::getline(in, line);
+    return line == header;
+}
+
+// True if `filename` already has a row whose first column is `index` and
+// whose next keys.size() columns equal `keys` (e.g. {temperature, rho}),
+// so a resumed sweep can skip grid points that are already done.
+inline bool summaryRowExists(const std::string &filename, int index, const std::vector<double> &keys)
+{
+    std::ifstream in(filename);
+    if (!in)
+        return false;
+
+    std::string line;
+    std::getline(in, line); // header
+    while (std::getline(in, line))
+    {
+        std::stringstream ss(line);
+        std::string cell;
+        std::getline(ss, cell, ',');
+        if (cell.empty())
+            continue;
+        try
+        {
+            if (std::stoi(cell) != index)
+                continue;
+            bool match = true;
+            for (double key : keys)
+            {
+                std::getline(ss, cell, ',');
+                const double v = std::stod(cell);
+                if (std::abs(v - key) > 1e-9 * std::max(1.0, std::abs(key)))
+                {
+                    match = false;
+                    break;
+                }
+            }
+            if (match)
+                return true;
+        }
+        catch (...)
+        {
+            continue;
+        }
+    }
+    return false;
 }
 
 #endif // COMMON_CLI_ARGS_H

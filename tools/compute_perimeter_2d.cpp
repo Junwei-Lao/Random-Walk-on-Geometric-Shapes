@@ -31,6 +31,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -240,7 +241,7 @@ void printUsage(const char *prog)
     std::cout <<
         "Usage: " << prog << " [flags]\n\n"
         "  --list-shapes   Print all valid --shape values and exit\n"
-        "  --shape=NAME|ALL  Shape to compute, or ALL for every 2D shape (default ALL)\n"
+        "  --shape=NAME[,NAME..]|ALL  Shape(s) to compute, or ALL for every 2D shape (default ALL)\n"
         "  --index=N       Size index (default 100). The isoperimetric ratio P/sqrt(A)\n"
         "                  is scale-invariant -- this only affects the reported\n"
         "                  absolute Area/Perimeter columns, not Ratio\n"
@@ -278,13 +279,19 @@ int main(int argc, char *argv[])
     }
     else
     {
-        ShapeType2D shape;
-        if (!shapeFromName(shapeArg, shape))
+        // Comma-separated list, e.g. the makefile's resolved ALL\NAME form.
+        std::stringstream ss(shapeArg);
+        std::string name;
+        while (std::getline(ss, name, ','))
         {
-            std::cerr << "Unknown shape '" << shapeArg << "'. Run with --list-shapes to see valid names.\n";
-            return 1;
+            ShapeType2D shape;
+            if (!shapeFromName(name, shape))
+            {
+                std::cerr << "Unknown shape '" << name << "'. Run with --list-shapes to see valid names.\n";
+                return 1;
+            }
+            targets.push_back({shape, name});
         }
-        targets.push_back({shape, shapeArg});
     }
 
     const std::string outFile = outdir + "/isoperimetric_2d.csv";

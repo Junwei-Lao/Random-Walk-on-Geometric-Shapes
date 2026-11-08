@@ -79,7 +79,8 @@ LatticePoint2D getNextPositionDrag(LatticePoint2D pos, int modulus, double dragF
 } // namespace
 
 WalkResult2D walk(int index, ShapeType2D shape, const WalkParams2D &params,
-                   WalkContext2D &ctx, std::vector<LatticePoint2D> *outPath)
+                   WalkContext2D &ctx, std::vector<LatticePoint2D> *outPath,
+                   std::vector<DiskCenter2D> *outCoverCenters)
 {
     if (params.mode == WalkMode2D::DRAG && shape != ShapeType2D::SQUARE)
         throw std::invalid_argument("DRAG mode is defined only for SQUARE (doc section 1.9)");
@@ -97,20 +98,25 @@ WalkResult2D walk(int index, ShapeType2D shape, const WalkParams2D &params,
     LatticePoint2D pos = sampleUniform(cs, ctx.rng);
     freeConnectedShape(cs);
 
-    DiskCover2D cover(params.coverRho * index, shape, index);
+    // Only the sampled run that main() writes to disk asks for its path and
+    // disk centers; every other run keeps just the summary numbers.
+    DiskCover2D cover(params.coverRho * index, shape, index, outCoverCenters != nullptr);
 
     PointSet2D visited;
     visited.reserve(static_cast<std::size_t>(shapePoints) / 2 + 1);
 
     std::vector<LatticePoint2D> path;
-    path.reserve(static_cast<std::size_t>(std::max(target + 5, 1000)));
-    path.push_back(pos);
+    if (outPath)
+    {
+        path.reserve(static_cast<std::size_t>(std::max(target + 5, 1000)));
+        path.push_back(pos);
+    }
 
     if (inBoundary(pos.x, pos.y, index, shape))
     {
         visited.insert(pos);
         if (params.enableCover)
-            cover.coverPoint(pos.x, pos.y);
+            cover.tryPlaceDisk(pos.x, pos.y, ctx.rng);
     }
 
     int steps = 0;
@@ -129,23 +135,26 @@ WalkResult2D walk(int index, ShapeType2D shape, const WalkParams2D &params,
             break;
         }
 
-        path.push_back(pos);
+        if (outPath)
+            path.push_back(pos);
         ++steps;
 
         if (inBoundary(pos.x, pos.y, index, shape))
         {
             if (visited.insert(pos).second && params.enableCover)
-                cover.coverPoint(pos.x, pos.y);
+                cover.tryPlaceDisk(pos.x, pos.y, ctx.rng);
         }
     }
 
     WalkResult2D result;
     result.steps = steps;
     if (params.enableCover)
-        result.coverageFraction = cover.coverageFraction(shapePoints);
+        result.diskCount = cover.diskCount();
 
     if (outPath)
         *outPath = std::move(path);
+    if (outCoverCenters && params.enableCover)
+        *outCoverCenters = cover.centers();
 
     return result;
 }

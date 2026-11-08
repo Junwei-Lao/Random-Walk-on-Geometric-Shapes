@@ -1,6 +1,7 @@
 #include "walk.h"
 
 #include <array>
+#include <cmath>
 #include <iostream>
 
 namespace
@@ -28,9 +29,29 @@ LatticePoint3D getNextPositionHard(LatticePoint3D pos, int index, ShapeType3D sh
     int d = allowed[pick(rng)];
     return LatticePoint3D(pos.x + kDirs[d].x, pos.y + kDirs[d].y, pos.z + kDirs[d].z);
 }
+
+// 3D version of the 2D soft-boundary step (doc eq. 4/5): w_i = exp(-d_i^p / T)
+// over all 6 axis directions. Deep in the interior every d_i == 0, so the
+// walk reduces to a uniform choice there, exactly as in 2D.
+LatticePoint3D getNextPositionSoft(LatticePoint3D pos, int index, ShapeType3D shape,
+                                    const WalkParams3D &params, std::mt19937_64 &rng)
+{
+    std::array<double, 6> weights{};
+    for (int d = 0; d < 6; ++d)
+    {
+        LatticePoint3D next(pos.x + kDirs[d].x, pos.y + kDirs[d].y, pos.z + kDirs[d].z);
+        int dist = distanceToShape(next, index, shape);
+        weights[d] = std::exp(-std::pow(static_cast<double>(dist), params.distancePower) / params.temperature);
+    }
+
+    std::discrete_distribution<int> dist(weights.begin(), weights.end());
+    int d = dist(rng);
+    return LatticePoint3D(pos.x + kDirs[d].x, pos.y + kDirs[d].y, pos.z + kDirs[d].z);
+}
 } // namespace
 
-int walk(int index, ShapeType3D shape, WalkContext3D &ctx, std::vector<LatticePoint3D> *outPath)
+int walk(int index, ShapeType3D shape, const WalkParams3D &params, WalkContext3D &ctx,
+         std::vector<LatticePoint3D> *outPath)
 {
     const int shapePoints = getPointsInShape(index, shape);
     const int target = shapePoints / 2; // 3D also stops at 50%
@@ -39,11 +60,14 @@ int walk(int index, ShapeType3D shape, WalkContext3D &ctx, std::vector<LatticePo
     initialize(pos, shape, index, ctx.rng);
 
     PointSet3D visited;
-    visited.reserve(static_cast<std::size_t>(shapePoints) * 3 / 4 + 1);
+    visited.reserve(static_cast<std::size_t>(shapePoints) / 2 + 1);
 
     std::vector<LatticePoint3D> path;
-    path.reserve(static_cast<std::size_t>(std::max(target + 5, 1000)));
-    path.push_back(pos);
+    if (outPath)
+    {
+        path.reserve(static_cast<std::size_t>(std::max(target + 5, 1000)));
+        path.push_back(pos);
+    }
 
     if (inBoundary(pos.x, pos.y, pos.z, index, shape))
         visited.insert(pos);
@@ -51,8 +75,18 @@ int walk(int index, ShapeType3D shape, WalkContext3D &ctx, std::vector<LatticePo
     int steps = 0;
     while (static_cast<int>(visited.size()) < target)
     {
-        pos = getNextPositionHard(pos, index, shape, ctx.rng);
-        path.push_back(pos);
+        switch (params.mode)
+        {
+        case WalkMode3D::HARD:
+            pos = getNextPositionHard(pos, index, shape, ctx.rng);
+            break;
+        case WalkMode3D::SOFT:
+            pos = getNextPositionSoft(pos, index, shape, params, ctx.rng);
+            break;
+        }
+
+        if (outPath)
+            path.push_back(pos);
         ++steps;
 
         if (inBoundary(pos.x, pos.y, pos.z, index, shape))

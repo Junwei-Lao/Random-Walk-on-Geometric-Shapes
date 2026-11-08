@@ -1,6 +1,8 @@
 #include "shapes.h"
 
+#include <array>
 #include <cmath>
+#include <queue>
 #include <stdexcept>
 
 const double PI = std::acos(-1);
@@ -181,4 +183,33 @@ void initialize(LatticePoint3D &start, ShapeType3D shape, int index, std::mt1993
         start.y = distY(rng);
         start.z = distZ(rng);
     } while (!inBoundary(start.x, start.y, start.z, index, shape));
+}
+
+int distanceToShape(LatticePoint3D from, int index, ShapeType3D shape)
+{
+    if (inBoundary(from.x, from.y, from.z, index, shape))
+        return 0;
+
+    static const std::array<LatticePoint3D, 6> dirs{{{-1, 0, 0}, {1, 0, 0}, {0, -1, 0}, {0, 1, 0}, {0, 0, -1}, {0, 0, 1}}};
+
+    std::queue<std::pair<LatticePoint3D, int>> bfsQueue;
+    PointSet3D visited;
+    visited.insert(from);
+    bfsQueue.push({from, 0});
+
+    while (!bfsQueue.empty())
+    {
+        auto [cur, dist] = bfsQueue.front();
+        bfsQueue.pop();
+        for (const auto &d : dirs)
+        {
+            LatticePoint3D next(cur.x + d.x, cur.y + d.y, cur.z + d.z);
+            if (inBoundary(next.x, next.y, next.z, index, shape))
+                return dist + 1;
+            if (visited.insert(next).second)
+                bfsQueue.push({next, dist + 1});
+        }
+    }
+
+    throw std::runtime_error("BFS exhausted all options without finding the shape boundary");
 }
